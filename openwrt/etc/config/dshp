@@ -1,0 +1,22 @@
+config dshp 'main'
+	option enabled '1'
+	option listen '127.0.0.1:19000'
+	option upstream 'http://127.0.0.1:9100'
+	option upstream_host 'localhost'
+	option worker_threads '2'
+	option block_cache_bytes '8388608'
+	option cache_ttl_secs '21600'
+	option stats_file '/overlay/dshp/stats.toml'
+
+config client 'client'
+	option enabled '0'
+	option listen '0.0.0.0:8080'
+	# 占位符：真实部署的域名写在你自己的部署机上，不要入库
+	# （原因见本地归档 dev-notes/publication-checklist.md，该目录不进版本库）
+	option server 'wss://llmproxy.example.com'
+	option upstream_host 'localhost'
+	# 直连兜底（可选）：DSHP 链路不可用时改走这个上游前缀。
+	# **纯前缀拼接** ⇒ 只写 scheme://host[:port]，**不要带 `/v1`**；且必须是 http://
+	# （客户端不支持 TLS 上游，见 crates/llmproxyc/src/config.rs 的 enforce_http）。
+	# 192.0.2.0/24 是文档用地址段（TEST-NET-1），换成你自己的上游主机。
+	option upstream_fallback 'http://192.0.2.10:3000'

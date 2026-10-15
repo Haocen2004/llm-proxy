@@ -1,0 +1,10 @@
+[package]
+name = "llm-proxy-json"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "保序 JSON span 扫描与结构骨架（M1）"
+
+[dependencies]
+blake3.workspace = true

@@ -1,0 +1,10 @@
+[package]
+name = "llm-proxy-cache"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "对象/块缓存：LRU + 固定 6h TTL（M1）"
+
+[dependencies]
+llm-proxy-core.workspace = true

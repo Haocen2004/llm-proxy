@@ -1,0 +1,165 @@
+syntax = "proto3";
+
+// DSHP v1 载荷定义。
+//
+// 注意：magic/ver/type/flags/stream_id/seq/payload_len/crc32c 在 **24 字节固定帧头**里，
+// 不在此处重复。设计文档早期版本把 type/stream_id/seq 同时放进帧头和 Frame 消息，
+// 属于冗余，实现时已去掉。本文件只描述每种帧类型**专属**的载荷。
+package dshp.v1;
+
+// ---------------------------------------------------------------------------
+// 协商
+// ---------------------------------------------------------------------------
+
+message Hello {
+  string proto_version = 1;
+  string tenant = 2;
+  // 客户端本地训练出的字典（见设计 §7.3）。首启动时可只带 dict_id 使用内嵌引导字典。
+  uint32 dict_id = 3;
+  bytes dict = 4;
+  // 抗重放：单调 nonce 与时间戳，配合 HMAC 认证
+  uint64 nonce = 5;
+  int64 timestamp_ms = 6;
+  bytes hmac = 7;
+  repeated string caps = 8;
+  // 客户端**临时** X25519 公钥（32 字节）。与 PSK 一起派生出会话密钥，
+  // 并由其临时性提供前向保密。
+  bytes x25519_pub = 9;
+}
+
+// 握手：客户端在 Hello 里带上自己的**临时** X25519 公钥；服务端在 Caps 里回自己的，
+// 并附上「服务端确认值」。客户端校验后回一条 KeyConfirm（此时已加密）。
+//
+// 为什么 PSK 之外还要 X25519：PSK 提供认证，X25519 提供**前向保密**——临时私钥
+// 用完即弃，PSK 日后泄露也解不开过去的流量（设计 §13.4）。
+message Caps {
+  string proto_version = 1;
+  uint32 dict_id = 2;
+  repeated string caps = 3;
+  // 两端必须一致，否则缓存命名空间会错位（设计 §4.1）
+  string upstream_host = 4;
+  uint32 max_frame_bytes = 5;
+  uint32 window_log = 6;
+  // 服务端**临时** X25519 公钥
+  bytes x25519_pub = 7;
+  // 服务端确认值：以 PSK+DH 为密钥的 PRF 输出，客户端据此认证服务端。
+  // 不校验它 = 没有双向认证（设计 §13.8：假 server 会诱骗 client 交出 API key）。
+  bytes confirm = 8;
+  // 服务端的租户。回传它是为了让客户端也能**双向**校验一致（设计 §4.1：
+  // 两端都配置、并在握手中校验一致，不一致直接拒绝）。
+  string tenant = 9;
+}
+// 客户端在收到并校验 Caps 之后回送的确认值。
+//
+// 此时客户端已开启 AEAD，因此这条帧本身是加密的——「能发出合法密文」已经证明了
+// PSK 知识，确认值是第二道显式认证。
+message KeyConfirm {
+  bytes confirm = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 请求方向
+// ---------------------------------------------------------------------------
+
+enum Encoding {
+  ENC_RAW = 0;
+  ENC_TOKENSTREAM = 1;
+  ENC_STRUCT = 2;
+  // 请求体是**单个 zstd 帧**，使用握手协商的 dict_patch。
+  //
+  // 用于冷启动/缓存未命中的整段回退路径：那条路径上要原样发出整个 body
+  // （真实量级 3 MB），zstd 是唯一能显著削减它的手段。
+  // 增量路径不需要它——块级 REF 已经把上行压到 0.5%。
+  ENC_ZSTD = 3;
+}
+
+message Header {
+  string name = 1;
+  // 用 bytes 而非 string：HTTP header 值允许非 UTF-8 字节，
+  // 用 string 会在两端做 lossy 转换，破坏"逐字节一致"这一正确性红线。
+  bytes value = 2;
+}
+
+message ReqOpen {
+  string method = 1;
+  // path **与 query 原样保留**，不做映射（设计 §4.1）
+  string path_and_query = 2;
+  repeated Header headers = 3;
+  // 客户端持有的候选基线指纹，服务端取第一个本地存在的（设计 §5.2）
+  repeated bytes alt_bases = 4;
+  Encoding encoding = 5;
+  bytes target_fp = 6;
+  uint64 req_id = 7;
+  // **客户端的模板表是空的**，请把本流引用到的模板定义一并下发（第 195 轮 + 第 197 轮自愈 ✓）。
+  //
+  // 为什么需要它：模板 id 是**每会话单调**的（服务端的 `Inducer` 每会话一个且长期存活），
+  // 而 `TemplateDef` 原本只在**首次定义**时发一次 ⇒ 客户端一旦换了新表（重连 / 进程刚起），
+  // 后面某条响应引用到"更早响应里定义过的模板"时就必然 `UnknownTemplate`
+  // ⇒ 按 M7 红线如实截断 ⇒ harness 报 `terminated`。
+  //
+  // 中间试过"客户端报**已知最大 id**"（第 196 轮 ✓）⇒ **不够** ✗：现场抓到过表**中间有洞**
+  // （有 id 35 ✓ 却缺 54 ✓）⇒ 一个数字表达不了洞的位置 ✗。
+  // ⇒ 改为"**自愈**"（第 197 轮 ✓）：客户端一旦遇到不认识的 id 就**清空整张表** ✓
+  // ⇒ 下一条流这里就是 true ✓ ⇒ 服务端全量补发 ✓ ⇒ 只多丢那一次响应 ✓。
+  bool client_needs_defs = 8;
+}
+
+message Need {
+  repeated bytes missing_blocks = 1;
+}
+
+message ReqCommit {
+  uint64 req_id = 1;
+}
+
+// ---------------------------------------------------------------------------
+// 响应方向
+// ---------------------------------------------------------------------------
+
+message RespHead {
+  uint32 status = 1;
+  repeated Header headers = 2;
+  uint64 req_id = 3;
+}
+
+message RespEnd {
+  uint64 req_id = 1;
+  bytes usage = 2;
+}
+
+// 响应侧模板定义。由**服务端主导**建立并显式下发（设计 §6.2）：
+// 两端各自独立归纳会在边界条件上发散，产生静默错误，因此客户端不得自行归纳。
+message TemplateDef {
+  uint32 template_id = 1;
+  bytes schema = 2;
+  // 交替的字面段，segments.len() == var_paths.len() + 1。
+  // 客户端重组只做 seg0 + v0 + seg1 + …，**不存在任何 JSON 序列化步骤**，
+  // 因此逐字节一致是构造性成立的。
+  repeated bytes segments = 3;
+  // 变量槽对应的叶值路径，仅用于观测与调试。
+  repeated string var_paths = 4;
+}
+
+// 批量帧的**载荷**不用 protobuf，见 `llm-proxy-core::batch` 的紧凑编码：
+// 批量帧在热路径上，protobuf 每条目约 4 字节的 tag/length 开销，在 128 字节的
+// Anthropic 事件上就是约 3%——足以决定「省 ≥90%」这条验收线过不过。
+
+// ---------------------------------------------------------------------------
+// 控制
+// ---------------------------------------------------------------------------
+
+message Resume {
+  uint64 req_id = 1;
+  uint32 ack_seq = 2;
+}
+
+message Err {
+  uint32 code = 1;
+  string detail = 2;
+  // 直接携带降级指令，客户端无需本地判断（设计 §8.3）
+  string hint = 3;
+  uint64 req_id = 4;
+  // BLOCK_MISS 时携带缺失块指纹，便于一次补发（设计 §9.2：最多 1 个 RTT）。
+  // 用 bytes 而不是拼进 detail，避免十六进制文本膨胀与解析歧义。
+  repeated bytes missing = 5;
+}

@@ -1,0 +1,84 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/llm-proxy-core",
+    "crates/llm-proxy-json",
+    "crates/llm-proxy-cache",
+    "crates/llm-proxy-transport",
+    "crates/llmproxyc",
+    "crates/llmproxyd",
+    "crates/e2e-tests",
+    "crates/dev-tools",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.82"
+license = "MIT"
+
+[workspace.dependencies]
+# SIMD 子串查找：usage 扫描热路径（第 187 轮实测热点 ✓）。本来就在依赖树里 ✓
+memchr = "2"
+llm-proxy-core = { path = "crates/llm-proxy-core" }
+llm-proxy-json = { path = "crates/llm-proxy-json" }
+llm-proxy-cache = { path = "crates/llm-proxy-cache" }
+llm-proxy-transport = { path = "crates/llm-proxy-transport" }
+
+tokio = { version = "1", default-features = false }
+# Cloudflare Tunnel and other HTTPS front doors expose the DSHP WebSocket as
+# wss://. Keep the native WS path while enabling rustls for the client side;
+# the server still terminates plain WS behind the tunnel.
+tokio-tungstenite = { version = "0.24", features = ["rustls-tls-native-roots"] }
+rustls = { version = "0.23", default-features = false, features = ["std", "ring"] }
+# 上游 TLS（缺口 #4）：让 `--upstream` / `--upstream-fallback` 支持 `https://`。
+#
+# 根证书用**内嵌的 Mozilla 根集**（`webpki-roots`），不读系统证书目录：软路由（OpenWrt）上
+# 常常根本没有 `/etc/ssl/certs` ⇒ 读系统存储会变成"在开发机上能连、装到设备上就不行" ✗。
+# 私有/自签 CA 用 `--upstream-ca <path>` **追加**（不是替换 ✓）。
+# **刻意不提供"跳过校验"的开关**：那等于把 TLS 做成装饰品 ✗。
+hyper-rustls = { version = "0.27", default-features = false, features = ["ring", "http1"] }
+# 版本与 hyper-rustls 拉进来的那一份对齐（`cargo tree` 实测它会带 1.x）：
+# 钉成 0.26 会让二进制里出现**两份根证书数据**（各约 200KB）✗。
+webpki-roots = "1"
+rustls-pemfile = "2"
+futures-util = { version = "0.3", default-features = false }
+hyper = { version = "1", features = ["http1", "server", "client"] }
+hyper-util = { version = "0.1", features = ["tokio", "client-legacy", "http1"] }
+http-body-util = "0.1"
+http = "1"
+bytes = "1"
+prost = "0.13"
+zstd = { version = "0.13", default-features = false, features = ["zdict_builder"] }
+# 传输安全（设计 §13.4）：X25519 + PSK 组成 Noise IK 风格握手，AEAD 用 ChaCha20-Poly1305。
+# 不用 AES-GCM：软路由常见的 ARM Cortex-A53 上 ARMv8 Crypto Extensions 是**可选项**，
+# 无硬件 AES 时软件实现慢数倍且有查表时序侧信道风险。
+chacha20poly1305 = { version = "0.10", default-features = false, features = ["alloc"] }
+x25519-dalek = { version = "2", default-features = false, features = ["static_secrets"] }
+hkdf = "0.12"
+sha2 = "0.10"
+subtle = "2"
+getrandom = "0.2"
+blake3 = "1"
+# SSE 传输模式（M3）要把二进制帧塞进 `text/event-stream`，必须做文本编码。
+# 自己手写 base64 没必要：它是标准且需要严格对齐填充规则的编解码，
+# 用成熟实现比自造更可靠。
+base64 = "0.22"
+# tokio 的 mpsc::Sender 没有 Sink 实现（也没有 sink feature），而 Mux 要求写出端是 Sink。
+futures-channel = { version = "0.3", features = ["sink"] }
+thiserror = "2"
+tracing = "0.1"
+tracing-subscriber = { version = "0.3", features = ["fmt", "env-filter"] }
+anyhow = "1"
+clap = { version = "4", features = ["derive"] }
+toml = "0.8"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+flate2 = "1"
+
+[profile.release]
+opt-level = "z"
+lto = "fat"
+codegen-units = 1
+panic = "abort"
+strip = true

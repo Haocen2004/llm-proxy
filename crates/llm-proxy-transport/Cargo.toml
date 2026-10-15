@@ -1,0 +1,33 @@
+[package]
+name = "llm-proxy-transport"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+description = "DSHP 传输：WS / SSE / KCP 的统一会话抽象与降级链"
+
+[dependencies]
+llm-proxy-core.workspace = true
+# 复用 llm-proxy-json 的 SSE 事件边界扫描：它已经正确处理了 `\n\n` / `\r\n\r\n` / `\r\r`
+# 三种分隔并测过了。再写一份 SSE 解析器等于养两套会各自漂移的实现。
+llm-proxy-json.workspace = true
+base64.workspace = true
+futures-channel.workspace = true
+blake3.workspace = true
+http-body = "1"
+http-body-util = "0.1"
+tokio = { workspace = true, features = ["net", "rt", "macros", "sync", "time", "io-util"] }
+tokio-tungstenite.workspace = true
+rustls.workspace = true
+# 上游 HTTP 客户端（含 TLS，缺口 #4）：这一层与 WS/KCP 一样属于"传输"，放这里两端的
+# `config.rs` 就能共用**同一份**连接器构造，不必各写一遍（那两份一定会各自漂移 ✗）。
+hyper = { workspace = true, features = ["client"] }
+hyper-util = { workspace = true, features = ["tokio", "client-legacy", "http1"] }
+hyper-rustls.workspace = true
+webpki-roots.workspace = true
+rustls-pemfile.workspace = true
+futures-util = { workspace = true, features = ["sink", "std"] }
+bytes.workspace = true
+http.workspace = true
+thiserror.workspace = true
+tracing.workspace = true

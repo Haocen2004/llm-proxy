@@ -1,0 +1,197 @@
+name: CI
+
+# DSHP 的两道防线，缺一不可：
+#
+#   1. Rust 侧（fmt / clippy / 单元 + 端到端测试）—— 保证实现没退化；
+#   2. 回归门禁（合成 baseline + 字典产物）—— 保证**压缩收益**没退化。
+#
+# 第 2 点尤其重要：压缩相关的退化不会让任何测试变红，只会让省下来的流量悄悄变少。
+# 本项目在 M1/M2 阶段反复验证过这一点——指标是唯一能发现这类退化的东西。
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+  # 任何 Rust 警告直接视为失败，避免警告堆积到没人再看
+  RUSTFLAGS: -D warnings
+
+jobs:
+  rust:
+    name: Rust（fmt / clippy / 测试）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      - name: 格式
+        run: cargo fmt --all -- --check
+
+      - name: Clippy
+        run: cargo clippy --workspace --all-targets -- -D warnings
+
+      # 端到端测试会直接启动 target/debug 下的 llmproxyc / llmproxyd，
+      # 因此必须先构建，且**不能**用 --release（测试固定找 debug 目录）。
+      - name: 构建
+        run: cargo build --workspace
+
+      # --test-threads=1：端到端测试各自绑定本地端口并启动子进程，
+      # 并发跑会互相干扰（历史上出现过子进程抢占二进制文件导致构建失败）。
+      #
+      # **失败后整轮重跑一次**（第 180 轮定的策略）：e2e 里有一批按"本机时序"标定的用例
+      # （README 里记着三次偶发红），共享 runner 上更容易误报。真回归**两次都会红**，
+      # 环境抖动只红一次 —— 这样既不放宽任何红线判据，也不把环境差异当缺陷。
+      - name: 测试
+        run: |
+          cargo test --workspace -- --test-threads=1 || {
+            echo "::warning::第一遍有失败 ⇒ 整轮重跑一次（用于区分环境抖动与真回归）"
+            cargo test --workspace -- --test-threads=1
+          }
+
+  gates:
+    name: 回归门禁（合成 + 字典产物）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+
+      - uses: Swatinem/rust-cache@v2
+
+      # ⚠️ 这一 job 与 `rust` job 是**两台独立的 runner**，拿不到那边的构建产物，
+      # 而下面的 `soak` 会**启动** `target/debug/llmproxyd` 与 `llmproxyc`
+      # ⇒ 必须自己先构建。（本地 `scripts/ci.ps1` 本来就是"先 build 再跑"，两边要对齐。
+      # 第 180 轮首次在 GitHub 上跑时，这里报的正是"找不到 target/debug/llmproxyd"。）
+      - name: 构建（门禁里的 soak 要启动这两个二进制）
+        run: cargo build --workspace
+
+      # opkg 打包器自检：合成载荷走一遍打包 + 反向解析，含三个反例
+      # （非 ELF 载荷 / 缺成员 / 带 PT_INTERP 的动态二进制），任何平台都能跑
+      - name: opkg 打包器自检
+        run: cargo run --locked -q -p dev-tools -- package --selftest
+
+      # 常量、协议元素/字段、线程配置和文档入口统一由 Rust 门禁入口执行。
+      - name: Rust 源码与协议门禁
+        run: cargo run --locked -q -p dev-tools -- gates
+
+      - name: 合成门禁
+        run: cargo run --locked -q -p dev-tools -- baseline
+
+      - name: 字典产物门禁
+        run: cargo run --locked -q -p dev-tools -- verify-dicts
+
+      - name: 语料门禁机制（合成夹具）
+        run: |
+          cargo run --locked -q -p dev-tools -- smoke-corpus --out target/smoke-corpus
+          cargo run --locked -q -p dev-tools -- train --corpus target/smoke-corpus --out target/smoke-out --smoke --sizes 512,1024,2048
+
+      - name: 有界长稳压测（Rust）
+        run: cargo run --locked -q -p dev-tools -- soak --duration 60 --interval 5 --rate 60 --server-cache-mb 1 --ttl-secs 6 --ceiling-only --out target/soak/ci.json
+
+  arm:
+    name: ARM 静态单二进制（aarch64 + armv7）
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-unknown-linux-musl,armv7-unknown-linux-musleabihf
+
+      - uses: Swatinem/rust-cache@v2
+        with:
+          key: arm-cross
+
+      # zstd-sys 会编译 zstd 的 C 源码，所以必须有**目标平台**的 C 工具链。
+      #
+      # 用 **zig 自带的**交叉工具链（PyPI 官方 wheel），而不是 musl.cc 的预编译包：
+      # 第 180 轮第一次在 GitHub runner 上跑这个 workflow 时，`musl.cc` 直接连不上
+      # （`curl: (28) Failed to connect to musl.cc port 443 after 134868 ms`），
+      # 而 GitHub 上**没有**官方 musl 交叉工具链 release（三个候选仓库都是 404）。
+      # zig 来源是 PyPI，不依赖任何单个镜像；产物照样要过 `scripts/build-arm.sh` 的
+      # 三连校验（aarch64 + 静态链接 + 无动态依赖）。
+      - name: 安装 zig 交叉工具链（cargo-zigbuild）
+        run: |
+          python3 -m pip install --user --disable-pip-version-check ziglang cargo-zigbuild
+          # pip 装到 `~/.local/bin`，而它**默认不在 PATH 上**（第 180 轮实测：安装步骤
+          # 自己成功了，下一步却报"找不到 zig"）⇒ 显式加进后续步骤的 PATH。
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+          export PATH="$HOME/.local/bin:$PATH"
+          if ! command -v zig >/dev/null 2>&1; then
+            # 有些 ziglang wheel 只提供 `python -m ziglang`，没有 `zig` 入口
+            # （cargo-zigbuild 只认 PATH 上的 `zig`）⇒ 自己造一个包装器。
+            mkdir -p "$HOME/.local/bin"
+            printf '#!/bin/sh\nexec python3 -m ziglang "$@"\n' > "$HOME/.local/bin/zig"
+            chmod +x "$HOME/.local/bin/zig"
+          fi
+          command -v zig
+          zig version
+          command -v cargo-zigbuild
+
+      # 这条 job 守的是设计 §12 的**硬约束**：单个静态二进制、aarch64、
+      # 且大小在预算内。如果它变红，说明有人引入了动态链接或把体积撑爆了——
+      # 这类退化在宿主机上是**看不出来**的，只有交叉构建才会暴露。
+      - name: 交叉构建并校验（zig 路径）
+        env:
+          ARM_CARGO: cargo-zigbuild
+        run: bash scripts/build-arm.sh --package
+
+      # opkg 包：打包 + **独立**自校验（读 ELF 程序头确认载荷是静态 aarch64，
+      # 不依赖 file/readelf）。产物随 job 一起归档。
+      - name: opkg 打包与自校验
+        run: |
+          cargo run --locked -q -p dev-tools -- package --bin-dir target/aarch64-unknown-linux-musl/release --out dist
+          cargo run --locked -q -p dev-tools -- package --verify-only $(ls dist/*aarch64*.ipk)
+
+      # ---- 缺口 #7：armv7（老款软路由）----
+      #
+      # 为什么现在能做：设计 §12 记的阻塞点是"缺 `arm-linux-musleabihf-gcc`
+      # （vendored zstd 的 C 源码要它）" —— 那在 **zig 路径**下不成立 ✓（zig 自带各架构的
+      # musl 工具链 ✓，与 aarch64 是同一套 ✓）。第 182 轮本机实测：客户端 2,874 KiB /
+      # 服务端 2,985 KiB，`file` 判定 "ELF 32-bit LSB executable, ARM, EABI5 … statically
+      # linked, stripped" ✓。
+      #
+      # mipsle 仍**不做**（`rustup` 没有它的预编译 std，是 tier-3 ⇒ 要 `-Z build-std`，
+      # 那是 nightly 工具链 + 自编 std 的另一条路 ✗，收益（还有多少 mipsle 设备）也最可疑）。
+      - name: 交叉构建并校验 armv7（zig 路径）
+        env:
+          ARM_CARGO: cargo-zigbuild
+          ARM_TARGET: armv7-unknown-linux-musleabihf
+        run: bash scripts/build-arm.sh --package
+
+      - name: armv7 opkg 打包与自校验（含**架构判据的反例**）
+        run: |
+          cargo run --locked -q -p dev-tools -- package \
+            --bin-dir target/armv7-unknown-linux-musleabihf/release --arch armv7 --out dist
+          cargo run --locked -q -p dev-tools -- package --arch armv7 \
+            --verify-only $(ls dist/*armv7*.ipk)
+          # 反例：**同一个包**按 aarch64 校验必须失败 —— 否则说明 `--arch` 被忽略了，
+          # 而"参数被忽略"的表现恰好是"检查通过" ✗✗（架构判据就成了摆设）。
+          if cargo run --locked -q -p dev-tools -- package --arch aarch64 \
+               --verify-only $(ls dist/*armv7*.ipk); then
+            echo "✗ 架构判据失效：armv7 包按 aarch64 校验竟然通过了" >&2
+            exit 1
+          fi
+          echo "✓ 架构判据的反例成立：armv7 包按 aarch64 校验被拒"
+
+      - name: 归档 opkg
+        uses: actions/upload-artifact@v4
+        with:
+          name: dshp-ipk
+          path: dist/*.ipk
+
+      - name: 报告产物大小
+        run: |
+          ls -l dist/
+          tar tzvf dist/dshp-aarch64-unknown-linux-musl.tar.gz
+          tar tzvf dist/dshp-armv7-unknown-linux-musleabihf.tar.gz

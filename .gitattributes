@@ -1,0 +1,13 @@
+# 换行与二进制处理。**没有这个文件时，Windows 上的一次 checkout 会把工作区改成 CRLF**：
+# 本机 `core.autocrlf=true`，实测 `README.md` 的工作区比 blob 多出"行数个 CR"，
+# 而 `openwrt/etc/init.d/*`、`scripts/*.sh` 一旦变成 CRLF，scp 到 OpenWrt 后 ash 会直接
+# 跑不起来（`#!/bin/sh/etc/rc.common\r` ⇒ not found）。所以脚本一律钉 LF。
+
+* text=auto
+
+*.sh text eol=lf
+openwrt/etc/init.d/* text eol=lf
+openwrt/etc/config/* text eol=lf
+
+# 字典是训练产物（二进制）：绝不能被换行/编码规范化碰一下。
+*.zstdict binary

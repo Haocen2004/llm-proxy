@@ -1,0 +1,31 @@
+# 生成物：由 `cargo run -p dev-tools -- desensitize` 从真实流量日志转出，体积约 85 MiB。
+# 语料只作本地训练与门禁用途，不入库。
+corpus/
+# 同源但更大的导出（export-all-*）脱敏后的候选语料：同样是真实流量派生，不进仓库。
+corpus-next/
+
+# 构建产物
+target/
+**/*.rs.bk
+__pycache__/
+*.pyc
+/.toolchains/
+
+# 本地配置与密钥
+config.local.yaml
+*.local.yaml
+.env
+
+# 本地归档：开发过程（逐轮实测/复盘/审计）+ 设计文档 + 发布检查清单。
+# 只在本地留，不进版本库、不进公开仓库。
+/dev-notes/
+
+# 编辑器 / 系统
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+dist/
+
+# 交接/过程文档（含主机名、PID、内网地址等现场信息 ⇒ **不公开** ✗）。与 dev-notes/ 同一规矩。
+docs/

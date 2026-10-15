@@ -1,0 +1,19 @@
+[package]
+name = "dev-tools"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish = false
+description = "DSHP Rust 原生基准、语料工具与 CI 门禁"
+
+[dependencies]
+anyhow.workspace = true
+base64.workspace = true
+chacha20poly1305.workspace = true
+clap.workspace = true
+flate2.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+sha2.workspace = true
+zstd.workspace = true

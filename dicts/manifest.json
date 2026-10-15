@@ -1,0 +1,234 @@
+{
+  "source_corpus": "corpus-next",
+  "trained_on": "desensitized corpus (dev-tools desensitize)",
+  "dicts": {
+    "dict_patch": {
+      "size": 16384,
+      "bytes": 16384,
+      "sha256": "b1decac2e98febb6e4e5387535b5a66fc55485ea8a6d6b10aa76acf3045b1e36"
+    },
+    "dict_ctrl": {
+      "size": 1024,
+      "bytes": 1024,
+      "sha256": "e0c5980f921fc1398e9be68c420123054bd21d34fcf2e4be571ba0dbb53ecf34"
+    },
+    "dict_sse": {
+      "size": 4096,
+      "bytes": 4096,
+      "sha256": "7e889ed388bde89e68b3d554301656a51a569bb0ca2f595bc1ae55f084e6ced0"
+    }
+  },
+  "metrics": {
+    "zstd_level": 1,
+    "split": {
+      "kind": "global_time_ordered",
+      "holdout_frac": 0.35,
+      "gap_seconds": 120,
+      "max_span": 2,
+      "max_payload": 65536
+    },
+    "conversations": {
+      "chat_completions": {
+        "conversations": 28,
+        "sizes": [
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          3,
+          47
+        ]
+      },
+      "messages": {
+        "conversations": 20,
+        "sizes": [
+          383,
+          138,
+          4,
+          2,
+          7,
+          12,
+          1,
+          1,
+          1,
+          153,
+          1,
+          9,
+          1,
+          219,
+          1,
+          4,
+          1,
+          3,
+          21,
+          1
+        ]
+      }
+    },
+    "patch_build_stats": {
+      "chat_completions": {
+        "pairs": 172,
+        "kept": 64,
+        "drop_no_prefix": 108,
+        "drop_too_large": 0,
+        "drop_bad_json": 0
+      },
+      "messages": {
+        "pairs": 1874,
+        "kept": 1150,
+        "drop_no_prefix": 719,
+        "drop_too_large": 5,
+        "drop_bad_json": 0
+      }
+    },
+    "patch_samples": {
+      "total": 1214,
+      "train": 789,
+      "train_bytes": 5633481,
+      "holdout": 425,
+      "holdout_bytes": 2781049,
+      "holdout_first_ts": "2026-10-09 02:16:28",
+      "train_last_ts": "2026-10-09 02:16:11"
+    },
+    "sweep": {
+      "512": {
+        "dict_bytes": 512,
+        "train_ratio": 0.6331829289918613,
+        "holdout_ratio": 0.6374447196004098,
+        "gain_vs_nodict": 1.0159254046644648,
+        "structure_holdout_ratio": 0.3459022826868991,
+        "structure_gain": 1.2090542371813053
+      },
+      "1024": {
+        "dict_bytes": 1024,
+        "train_ratio": 0.6248784721205237,
+        "holdout_ratio": 0.6311417022857202,
+        "gain_vs_nodict": 1.0260711380122105,
+        "structure_holdout_ratio": 0.2760699413521704,
+        "structure_gain": 1.5148864758144127
+      },
+      "2048": {
+        "dict_bytes": 2048,
+        "train_ratio": 0.6199424476624666,
+        "holdout_ratio": 0.6272931544895469,
+        "gain_vs_nodict": 1.0323662550378812,
+        "structure_holdout_ratio": 0.24374822857392026,
+        "structure_gain": 1.7157647584973166
+      },
+      "4096": {
+        "dict_bytes": 4096,
+        "train_ratio": 0.6138094723315832,
+        "holdout_ratio": 0.6230652534349449,
+        "gain_vs_nodict": 1.0393715283288367,
+        "structure_holdout_ratio": 0.1854819369045283,
+        "structure_gain": 2.254745812518366
+      },
+      "8192": {
+        "dict_bytes": 8192,
+        "train_ratio": 0.6099436565065188,
+        "holdout_ratio": 0.6224475009250107,
+        "gain_vs_nodict": 1.0404030600956526,
+        "structure_holdout_ratio": 0.18833802079926745,
+        "structure_gain": 2.2205533368061583
+      },
+      "16384": {
+        "dict_bytes": 16384,
+        "train_ratio": 0.60636292196601,
+        "holdout_ratio": 0.622571554834165,
+        "gain_vs_nodict": 1.0401957488786544,
+        "structure_holdout_ratio": 0.1689395425905335,
+        "structure_gain": 2.475528311017906
+      },
+      "32768": {
+        "dict_bytes": 32768,
+        "train_ratio": 0.6000632646138329,
+        "holdout_ratio": 0.6241752662394657,
+        "gain_vs_nodict": 1.0375231441209036,
+        "structure_holdout_ratio": 0.19537467024222208,
+        "structure_gain": 2.140577486399777
+      }
+    },
+    "dict_saturation_vs_max": {
+      "512": 1.0212591784369958,
+      "1024": 1.011161025473223,
+      "2048": 1.0049952127530875,
+      "4096": 0.998221632825651,
+      "8192": 0.9972319228141407,
+      "16384": 0.9974306713321681,
+      "32768": 1.0
+    },
+    "saturation": {
+      "saturated": true,
+      "tested_min": 512,
+      "tested_max": 32768,
+      "note": "已在测试范围内饱和"
+    },
+    "structure_only": {
+      "holdout_ratio_nodict": 0.418214620533281,
+      "holdout_ratio_dict": 0.1689395425905335,
+      "gain_vs_nodict": 2.475528311017906,
+      "skeleton_share_train": 0.0678072758211131,
+      "skeleton_share_holdout": 0.06597079015867753
+    },
+    "chosen": {
+      "size": 16384,
+      "dict_bytes": 16384,
+      "holdout_ratio": 0.622571554834165,
+      "holdout_nodict_ratio": 0.6475962847112726,
+      "gain_vs_nodict": 1.0401957488786544
+    },
+    "full_body": {
+      "holdout_ratio_nodict": 0.6088546893636946,
+      "holdout_ratio_dict": 0.610457945973747,
+      "gain": 0.9973736821338363
+    },
+    "extra_dicts": {
+      "dict_sse": {
+        "dict_bytes": 4096,
+        "train_ratio": 0.29916693627255914,
+        "holdout_ratio": 0.14305723794890632,
+        "holdout_nodict": 0.17467876183432002,
+        "gain": 1.2210410625759984
+      },
+      "dict_ctrl": {
+        "dict_bytes": 1024,
+        "all_ratio": 0.1875763959867337,
+        "all_nodict": 0.792236290440333,
+        "gain": 4.223539354580433
+      }
+    },
+    "production_targets": {
+      "note": "下列目标无法在脱敏语料上验证，仅作部署后的验收项。",
+      "patch_ratio_target": 0.05,
+      "reason": "脱敏后正文为伪随机填充物，不含重复子串，字典无内容侧收益；真实文本可压至 25-35%，且含大量重复模板。"
+    }
+  },
+  "caveats": [
+    "语料内容为伪随机填充物：字典的**结构侧**收益真实，**内容侧**收益被低估。因此留出集压缩率是保守上界（实际部署会更好）。",
+    "时间切分：留出集全部晚于训练集，模拟「字典固定、流量为新」。",
+    "训练样本量偏少（见 patch_samples），更大字典可能欠拟合。",
+    "dict_id 应取 sha256 前缀；字典是协议的一部分，变更需两端同步。"
+  ]
+}

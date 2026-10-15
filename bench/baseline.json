@@ -1,0 +1,73 @@
+{
+  "compression": {
+    "sizes": {
+      "patch_1turn": 0.04563492063492063,
+      "patch_2turn": 0.025075225677031094,
+      "patch_4turn": 0.015128593040847202,
+      "small_32_dict": 0.6875,
+      "small_32_nodict": 1.28125,
+      "small_64_dict": 0.34375,
+      "small_64_nodict": 1.140625,
+      "small_256_dict": 0.08984375,
+      "small_256_nodict": 0.63671875,
+      "small_1024_dict": 0.0263671875,
+      "small_1024_nodict": 0.2314453125,
+      "manifest_dict": 1.0040625,
+      "manifest_nodict": 1.0028125
+    },
+    "times": {
+      "patch_1turn_us": 17.799997294787318,
+      "patch_2turn_us": 17.299993487540632,
+      "patch_4turn_us": 17.300000763498247
+    },
+    "dict_saturation": {
+      "512": 0.0641925777331996,
+      "2048": 0.025075225677031094,
+      "8192": 0.025075225677031094,
+      "16384": 0.025075225677031094
+    },
+    "dict_bytes": 4096,
+    "dict_2k_vs_16k_ratio": 1.0
+  },
+  "aead": {
+    "times": {
+      "aead_128_us": 2.5999979698099196,
+      "zstd_128_us": 1.700005668681115,
+      "aead_1024_us": 3.2000025385059416,
+      "zstd_1024_us": 4.099994839634746,
+      "aead_8192_us": 5.900001269765198,
+      "zstd_8192_us": 9.599993063602597,
+      "aead_65536_us": 30.199997127056122,
+      "zstd_65536_us": 18.300001102034003
+    },
+    "ratio_vs_zstd": {
+      "128": 1.5294054706458888,
+      "1024": 0.7804894063698428,
+      "8192": 0.6145839096628577,
+      "65536": 1.6502729676720873
+    },
+    "tag_overhead": {},
+    "batching": {
+      "frames": 203,
+      "batches": 11,
+      "per_frame_tag_bytes": 3248,
+      "batched_tag_bytes": 176,
+      "tag_reduction_ratio": 0.054187192118226604,
+      "frame_density": 0.054187192118226604,
+      "per_frame_tag_pct_of_payload": 261.93548387096774
+    }
+  },
+  "template": {
+    "raw_bytes": 49476,
+    "chunks": 202,
+    "template_ratio": 0.02506265664160401,
+    "bytes_per_chunk": 244.93069306930693,
+    "batched_total_ratio": 0.03395585738539898
+  },
+  "base64": {
+    "b64_bytes": 131095,
+    "compress_b64_ratio": 0.7523170220069415,
+    "decode_ratio": 0.7498684160341736,
+    "decode_then_compress_ratio": 0.7499370685380831
+  }
+}

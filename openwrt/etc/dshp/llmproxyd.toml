@@ -1,0 +1,6 @@
+listen = "127.0.0.1:19000"
+upstream_base = "http://127.0.0.1:9100"
+upstream_host = "localhost"
+worker_threads = 2
+block_cache_bytes = 8388608
+cache_ttl_secs = 21600
